@@ -122,6 +122,8 @@ func infoItems(
         let ItemNote = 3004
         let ItemAppFooter = 3005
         let ItemAyuFakeNumber = 3006
+        let ItemAyuStars = 3007
+        let ItemAyuLevel = 3008
         let ItemAffiliate = 4000
         let ItemAffiliateInfo = 4001
         let ItemBusinessHours = 5000
@@ -218,6 +220,19 @@ func infoItems(
             }, longTapAction: nil, contextAction: { node, gesture, _ in
                 interaction.openPhone(ayuNumber, node, gesture, nil)
             }, requestLayout: { animated in
+                interaction.requestLayout(animated)
+            }))
+        }
+        if let ayuEntry = ayuGramProfileEntry(peerId: user.id), ayuEntry.stars > 0 {
+            let formatter = NumberFormatter()
+            formatter.numberStyle = .decimal
+            let starsText = formatter.string(from: NSNumber(value: ayuEntry.stars)) ?? "\(ayuEntry.stars)"
+            items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: ItemAyuStars, label: i18n("Ayu.ProfileExtras.StarsLabel", presentationData.strings.baseLanguageCode), text: "⭐️ " + starsText, textColor: .primary, action: nil, longTapAction: nil, requestLayout: { animated in
+                interaction.requestLayout(animated)
+            }))
+        }
+        if let ayuEntry = ayuGramProfileEntry(peerId: user.id), ayuEntry.level > 0 {
+            items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: ItemAyuLevel, label: i18n("Ayu.ProfileExtras.LevelLabel", presentationData.strings.baseLanguageCode), text: i18n("Ayu.ProfileExtras.LevelValue", presentationData.strings.baseLanguageCode, "\(ayuEntry.level)"), textColor: .primary, action: nil, longTapAction: nil, requestLayout: { animated in
                 interaction.requestLayout(animated)
             }))
         }

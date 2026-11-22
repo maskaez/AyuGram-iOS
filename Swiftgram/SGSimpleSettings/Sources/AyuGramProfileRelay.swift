@@ -233,9 +233,11 @@ public struct AyuGramProfileEntry: Codable, Equatable {
     public var statusSlug: String?
     public var number: String?
     public var brightness: Double
+    public var stars: Int64
+    public var level: Int32
     public var updatedAt: Double
 
-    public init(id: Int64, nfts: [AyuGramProfileNft], usernames: [String], background: AyuGramProfileBackground?, bubbles: Bool, hideReal: Bool = false, statusSlug: String? = nil, number: String? = nil, brightness: Double = 0.0, updatedAt: Double) {
+    public init(id: Int64, nfts: [AyuGramProfileNft], usernames: [String], background: AyuGramProfileBackground?, bubbles: Bool, hideReal: Bool = false, statusSlug: String? = nil, number: String? = nil, brightness: Double = 0.0, stars: Int64 = 0, level: Int32 = 0, updatedAt: Double) {
         self.id = id
         self.nfts = nfts
         self.usernames = usernames
@@ -245,11 +247,13 @@ public struct AyuGramProfileEntry: Codable, Equatable {
         self.statusSlug = statusSlug
         self.number = number
         self.brightness = AyuGramProfileEntry.clampBrightness(brightness)
+        self.stars = AyuGramProfileEntry.clampStars(stars)
+        self.level = AyuGramProfileEntry.clampLevel(level)
         self.updatedAt = updatedAt
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, nfts, usernames, background, bubbles, hideReal, statusSlug, number, brightness, updatedAt
+        case id, nfts, usernames, background, bubbles, hideReal, statusSlug, number, brightness, stars, level, updatedAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -264,11 +268,33 @@ public struct AyuGramProfileEntry: Codable, Equatable {
         self.number = try container.decodeIfPresent(String.self, forKey: .number).flatMap(AyuGramProfileEntry.normalizeNumber)
         let brightness = try container.decodeIfPresent(Double.self, forKey: .brightness) ?? 0.0
         self.brightness = AyuGramProfileEntry.clampBrightness(brightness)
+        self.stars = AyuGramProfileEntry.clampStars(try container.decodeIfPresent(Int64.self, forKey: .stars) ?? 0)
+        self.level = AyuGramProfileEntry.clampLevel(try container.decodeIfPresent(Int32.self, forKey: .level) ?? 0)
         self.updatedAt = try container.decodeIfPresent(Double.self, forKey: .updatedAt) ?? 0.0
     }
 
     public var isEmpty: Bool {
-        return self.nfts.isEmpty && self.usernames.isEmpty && self.background == nil && !self.bubbles && !self.hideReal && self.number == nil
+        return self.nfts.isEmpty && self.usernames.isEmpty && self.background == nil && !self.bubbles && !self.hideReal && self.number == nil && self.stars == 0 && self.level == 0
+    }
+
+    public static func clampStars(_ value: Int64) -> Int64 {
+        return max(0, min(999_999_999, value))
+    }
+
+    public static func clampLevel(_ value: Int32) -> Int32 {
+        return max(0, min(100, value))
+    }
+
+    public func withStars(_ value: Int64) -> AyuGramProfileEntry {
+        var result = self
+        result.stars = AyuGramProfileEntry.clampStars(value)
+        return result
+    }
+
+    public func withLevel(_ value: Int32) -> AyuGramProfileEntry {
+        var result = self
+        result.level = AyuGramProfileEntry.clampLevel(value)
+        return result
     }
 
     public var statusNft: AyuGramProfileNft? {
@@ -296,11 +322,8 @@ public struct AyuGramProfileEntry: Codable, Equatable {
         guard value.count <= 32 else {
             return nil
         }
-        var digits = String(String.UnicodeScalarView(value.unicodeScalars.filter { !CharacterSet.whitespacesAndNewlines.contains($0) && $0 != "(" && $0 != ")" && $0 != "-" }))
-        if digits.hasPrefix("+") {
-            digits.removeFirst()
-        }
-        guard digits.count == 11, digits.hasPrefix("888"), digits.unicodeScalars.allSatisfy({ $0 >= "0" && $0 <= "9" }) else {
+        let digits = String(String.UnicodeScalarView(value.unicodeScalars.filter { $0 >= "0" && $0 <= "9" }))
+        guard digits.count >= 4, digits.count <= 15 else {
             return nil
         }
         return "+" + digits
@@ -311,7 +334,20 @@ public struct AyuGramProfileEntry: Codable, Equatable {
             return value
         }
         let digits = Array(normalized.dropFirst())
-        return "+" + String(digits[0 ..< 3]) + " " + String(digits[3 ..< 7]) + " " + String(digits[7 ..< 11])
+        guard digits.count > 4 else {
+            return normalized
+        }
+        var groups: [String] = []
+        var remaining = digits
+        let head = min(3, max(1, remaining.count % 3 == 0 ? 3 : remaining.count % 3))
+        groups.append(String(remaining[0 ..< head]))
+        remaining.removeFirst(head)
+        while !remaining.isEmpty {
+            let take = min(3, remaining.count)
+            groups.append(String(remaining[0 ..< take]))
+            remaining.removeFirst(take)
+        }
+        return "+" + groups.joined(separator: " ")
     }
 
     public var orderedNfts: [AyuGramProfileNft] {
@@ -371,8 +407,10 @@ public struct AyuGramProfileEntry: Codable, Equatable {
         } else if let background = json["background"] as? [String: Any], let value = background["brightness"] as? NSNumber {
             brightness = value.doubleValue
         }
+        let stars = (json["stars"] as? NSNumber)?.int64Value ?? 0
+        let level = (json["level"] as? NSNumber)?.int32Value ?? 0
         let updatedAt = (json["updatedAt"] as? NSNumber)?.doubleValue ?? 0.0
-        return AyuGramProfileEntry(id: id, nfts: nfts, usernames: usernames, background: AyuGramProfileBackground.from(json: json["background"]), bubbles: bubbles, hideReal: hideReal, statusSlug: statusSlug, number: number, brightness: brightness, updatedAt: updatedAt)
+        return AyuGramProfileEntry(id: id, nfts: nfts, usernames: usernames, background: AyuGramProfileBackground.from(json: json["background"]), bubbles: bubbles, hideReal: hideReal, statusSlug: statusSlug, number: number, brightness: brightness, stars: stars, level: level, updatedAt: updatedAt)
     }
 }
 
@@ -519,6 +557,8 @@ public final class AyuGramProfileRelay {
 
     private let lock = NSLock()
     private var entries: [Int64: AyuGramProfileEntry] = [:]
+    private var localEntries: [Int64: AyuGramProfileEntry] = [:]
+    private var localSaveScheduled = false
     private var fetchedAt: [Int64: Double] = [:]
     private var pending = Set<Int64>()
     private var inFlight = Set<Int64>()
@@ -563,6 +603,7 @@ public final class AyuGramProfileRelay {
 
     private init() {
         self.loadFromDisk()
+        self.loadLocalFromDisk()
     }
 
     public static var baseDirectory: URL {
@@ -631,12 +672,104 @@ public final class AyuGramProfileRelay {
         defer {
             self.lock.unlock()
         }
+        if let local = self.localEntries[rawId] {
+            return local.isEmpty ? nil : local
+        }
         return self.entries[rawId]
     }
 
     public func observe(rawId: Int64) -> AyuGramProfileEntry? {
-        self.request(rawIds: [rawId], force: false)
+        self.lock.lock()
+        let hasLocal = self.localEntries[rawId] != nil
+        self.lock.unlock()
+        if !hasLocal {
+            self.request(rawIds: [rawId], force: false)
+        }
         return self.entry(rawId: rawId)
+    }
+
+    public func localEntry(rawId: Int64) -> AyuGramProfileEntry? {
+        self.lock.lock()
+        defer {
+            self.lock.unlock()
+        }
+        return self.localEntries[rawId]
+    }
+
+    public func localOrEmptyEntry(rawId: Int64) -> AyuGramProfileEntry {
+        if let existing = self.localEntry(rawId: rawId) {
+            return existing
+        }
+        return AyuGramProfileEntry(id: rawId, nfts: [], usernames: [], background: nil, bubbles: false, updatedAt: Date().timeIntervalSince1970)
+    }
+
+    public func setLocalEntry(_ entry: AyuGramProfileEntry) {
+        guard entry.id > 0 else {
+            return
+        }
+        var updated = entry
+        updated.updatedAt = Date().timeIntervalSince1970
+        self.lock.lock()
+        let changed = self.localEntries[entry.id] != updated
+        self.localEntries[entry.id] = updated
+        self.lock.unlock()
+        if changed {
+            self.scheduleLocalSave()
+            self.notify([entry.id])
+        }
+    }
+
+    public func clearLocalEntry(rawId: Int64) {
+        self.lock.lock()
+        let changed = self.localEntries.removeValue(forKey: rawId) != nil
+        self.lock.unlock()
+        if changed {
+            self.scheduleLocalSave()
+            self.notify([rawId])
+        }
+    }
+
+    private static var localStoreURL: URL {
+        return AyuGramProfileRelay.baseDirectory.appendingPathComponent("localProfiles.json")
+    }
+
+    private func loadLocalFromDisk() {
+        guard let data = try? Data(contentsOf: AyuGramProfileRelay.localStoreURL), let list = try? JSONDecoder().decode([AyuGramProfileEntry].self, from: data) else {
+            return
+        }
+        for entry in list where entry.id > 0 {
+            self.localEntries[entry.id] = entry
+        }
+    }
+
+    private func scheduleLocalSave() {
+        self.lock.lock()
+        if self.localSaveScheduled {
+            self.lock.unlock()
+            return
+        }
+        self.localSaveScheduled = true
+        self.lock.unlock()
+        self.queue.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.saveLocal()
+        }
+    }
+
+    private func saveLocal() {
+        self.lock.lock()
+        self.localSaveScheduled = false
+        let list = Array(self.localEntries.values)
+        self.lock.unlock()
+        guard let data = try? JSONEncoder().encode(list) else {
+            return
+        }
+        let directory = AyuGramProfileRelay.baseDirectory
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        var excluded = directory
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? excluded.setResourceValues(values)
+        try? data.write(to: AyuGramProfileRelay.localStoreURL, options: .atomic)
     }
 
     public func refreshVisible() {

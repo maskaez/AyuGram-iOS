@@ -410,30 +410,27 @@ public func ayuGramOwnNftPatch(entry: AyuGramProfileEntry, limits: AyuGramProfil
 
 public func ayuGramApplyOwnNftAction(accountPeerId: EnginePeer.Id, action: AyuGramOwnNftAction, completion: @escaping (AyuGramOwnEditError?) -> Void) {
     let accountId = ayuGramRawPeerId(accountPeerId)
-    AyuGramProfileRelay.shared.loadOwn(accountId: accountId, completion: { result in
-        switch result {
-        case let .success(own):
-            guard own.verified else {
-                completion(.profile(.unverified))
-                return
-            }
-            switch ayuGramOwnNftPatch(entry: own.entry, limits: own.limits, action: action) {
-            case let .success(patch):
-                AyuGramProfileRelay.shared.updateOwn(accountId: accountId, patch: patch, completion: { result in
-                    switch result {
-                    case .success:
-                        completion(nil)
-                    case let .failure(error):
-                        completion(.profile(error))
-                    }
-                })
-            case let .failure(error):
-                completion(error)
-            }
-        case let .failure(error):
-            completion(.profile(error))
+    let entry = AyuGramProfileRelay.shared.localOrEmptyEntry(rawId: accountId)
+    switch ayuGramOwnNftPatch(entry: entry, limits: AyuGramProfileLimits.standard, action: action) {
+    case let .success(patch):
+        var updated = entry
+        updated.id = accountId
+        if let nfts = patch.nfts {
+            updated.nfts = nfts
         }
-    })
+        if let status = patch.status {
+            switch status {
+            case let .set(slug):
+                updated.statusSlug = slug
+            case .clear:
+                updated.statusSlug = nil
+            }
+        }
+        AyuGramProfileRelay.shared.setLocalEntry(updated)
+        completion(nil)
+    case let .failure(error):
+        completion(error)
+    }
 }
 
 public func ayuGramRandomAnonymousNumber() -> String {
