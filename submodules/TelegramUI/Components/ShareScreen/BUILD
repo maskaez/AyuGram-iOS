@@ -13,8 +13,6 @@ swift_library(
         # Swift 6.3 / Xcode 26.6: release CopyPropagation ICE in init (see ci/ayugram_ci.py).
         "-Xfrontend",
         "-enable-copy-propagation=false",
-        "-Xfrontend",
-        "-disable-default-cmo",
     ],
     deps = [
         "//submodules/AsyncDisplayKit",

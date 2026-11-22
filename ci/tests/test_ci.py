@@ -100,6 +100,7 @@ class SwiftReleaseWorkaroundTests(unittest.TestCase):
                       / 'submodules/TelegramUI/Components/ShareScreen/BUILD')
         text = build_path.read_text(encoding='utf-8')
         self.assertIn('-enable-copy-propagation=false', text)
+        self.assertNotIn('-disable-default-cmo', text)
 
     def test_apply_and_restore_make_py(self):
         make_path = Path(__file__).resolve().parents[2] / 'build-system/Make/Make.py'
