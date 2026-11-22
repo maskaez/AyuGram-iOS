@@ -91,9 +91,11 @@ class ArtifactTests(unittest.TestCase):
 
 
 class SwiftReleaseWorkaroundTests(unittest.TestCase):
-    def test_make_wmo_marker_matches_repo(self):
+    def test_make_release_markers_match_repo(self):
         make_path = Path(__file__).resolve().parents[2] / 'build-system/Make/Make.py'
-        self.assertIn(ci._MAKE_WMO_FEATURE, make_path.read_text(encoding='utf-8'))
+        text = make_path.read_text(encoding='utf-8')
+        self.assertIn(ci._MAKE_WMO_FEATURE, text)
+        self.assertIn(ci._MAKE_OSIZE_FEATURE, text)
 
     def test_apply_and_restore_make_py(self):
         make_path = Path(__file__).resolve().parents[2] / 'build-system/Make/Make.py'
@@ -103,7 +105,9 @@ class SwiftReleaseWorkaroundTests(unittest.TestCase):
             self.assertEqual(backup, original)
             text = make_path.read_text(encoding='utf-8')
             self.assertNotIn("swift.opt_uses_wmo',", text)
+            self.assertNotIn("swift.opt_uses_osize',", text)
             self.assertIn('swift.opt_uses_wmo omitted in CI', text)
+            self.assertIn('swift.opt_uses_osize omitted in CI', text)
             make_path.write_bytes(original)
         except Exception:
             make_path.write_bytes(original)
