@@ -328,6 +328,8 @@ public final class ShareScreen: ViewControllerComponentContainer {
     private let animateOut = ActionSlot<Action<()>>()
     fileprivate var caption = NSAttributedString(string: "")
 
+    // Release optimizer ICE on Swift 6.3.3; keep this init out of -O/-Osize CopyPropagation.
+    @_optimize(none)
     public init(context: AccountContext, subject: Subject, externalShare: Bool = true, presetText: String? = nil, shareStory: (() -> Void)? = nil, preferredAction: ShareControllerPreferredAction = .default, externalShareSubject: ShareControllerSubject? = nil, shareAsLink: Bool = false, forceTheme: PresentationTheme? = nil, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, externalConfiguration: ShareScreenExternalConfiguration? = nil, mediaParameters: ShareControllerSubject.MediaParameters? = nil, segmentedValues: [ShareScreenSegmentedValue]? = nil, collectibleItemInfo: TelegramCollectibleItemInfo? = nil, forcedActionTitle: String? = nil, showInChat: ((EngineRawMessage) -> Void)? = nil, immediatePeerId: EnginePeer.Id? = nil) {
         self.externalConfiguration = externalConfiguration
         self.context = context

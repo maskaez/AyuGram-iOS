@@ -119,24 +119,19 @@ def save_manifest(path, manifest):
     path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
 
 
-# Xcode 26.6 (Swift 6.3.3) ICE in ShareScreen CopyPropagation with -Osize and default CMO.
+# Unsigned CI skips WMO on GitHub runners (--jobs=2); ShareScreen ICE is fixed in its BUILD/Sources.
 _MAKE_WMO_FEATURE = "            '--features=swift.opt_uses_wmo',\n"
-_MAKE_OSIZE_FEATURE = "            '--features=swift.opt_uses_osize',\n"
 
 
 def apply_swift_release_workaround(make_path):
-    """Tune Make.py release flags for unsigned CI on the pinned Swift toolchain."""
+    """Drop whole-module optimization for unsigned CI builds on resource-limited runners."""
     original = make_path.read_bytes()
     text = original.decode('utf-8')
-    if _MAKE_WMO_FEATURE not in text or _MAKE_OSIZE_FEATURE not in text:
+    if _MAKE_WMO_FEATURE not in text:
         raise ValueError('Make.py release args changed; update swift compiler workaround')
     text = text.replace(
         _MAKE_WMO_FEATURE,
-        "            # swift.opt_uses_wmo omitted in CI: Swift 6.3.3 CopyPropagation ICE in ShareScreen.\n",
-    )
-    text = text.replace(
-        _MAKE_OSIZE_FEATURE,
-        "            # swift.opt_uses_osize omitted in CI: same ShareScreen ICE with -Osize on Swift 6.3.3.\n",
+        "            # swift.opt_uses_wmo omitted in CI (runner RAM; ShareScreen has a local compile workaround).\n",
     )
     make_path.write_text(text, encoding='utf-8')
     return original
@@ -219,11 +214,7 @@ def build(source, ci, output, env):
                             # rules_swift WMO defaults to -num-threads NCPU; single-file output avoids
                             # another class of parallel WMO failures on the pinned Swift toolchain.
                             b'build --@build_bazel_rules_swift//swift:copt=-num-threads\n'
-                            b'build --@build_bazel_rules_swift//swift:copt=0\n'
-                            b'build --@build_bazel_rules_swift//swift:copt=-Xfrontend\n'
-                            b'build --@build_bazel_rules_swift//swift:copt=-disable-default-cmo\n'
-                            b'build --@build_bazel_rules_swift//swift:copt=-Xfrontend\n'
-                            b'build --@build_bazel_rules_swift//swift:copt=-enable-copy-propagation=false\n')
+                            b'build --@build_bazel_rules_swift//swift:copt=0\n')
         if configuration == 'release_arm64':
             original_make = apply_swift_release_workaround(make_path)
         # Let the repository download and checksum its own Bazel, not brew's latest.
