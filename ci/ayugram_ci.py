@@ -183,6 +183,10 @@ def build(source, ci, output, env):
                             b'build --features=disable_legacy_signing\n'
                             b'build --jobs=2\n'
                             b'build --worker_max_instances=SwiftCompile=1\n'
+                            # Xcode 26.6 / Swift 6.3.3 ICE in ShareScreen WMO (CopyPropagation / OSSA).
+                            b'build --features=-swift.opt_uses_wmo\n'
+                            b'build --@build_bazel_rules_swift//swift:copt=-num-threads 1\n'
+                            b'build --@build_bazel_rules_swift//swift:copt=-disable-sil-ownership-verifier\n'
                             # A module with many warnings can exceed Bazel's 1 MB output cap,
                             # which hides its compile errors from the log.
                             b'build --experimental_ui_max_stdouterr_bytes=-1\n'
