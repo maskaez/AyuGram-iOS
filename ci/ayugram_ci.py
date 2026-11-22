@@ -119,6 +119,24 @@ def save_manifest(path, manifest):
     path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
 
 
+# Xcode 26.6 (Swift 6.3.3) aborts in CopyPropagation when compiling ShareScreen with WMO + Osize.
+_MAKE_WMO_FEATURE = "            '--features=swift.opt_uses_wmo',\n"
+
+
+def apply_swift_release_workaround(make_path):
+    """Disable whole-module optimization for the unsigned CI build only."""
+    original = make_path.read_bytes()
+    text = original.decode('utf-8')
+    if _MAKE_WMO_FEATURE not in text:
+        raise ValueError('Make.py release args changed; update swift compiler workaround')
+    text = text.replace(
+        _MAKE_WMO_FEATURE,
+        "            # swift.opt_uses_wmo omitted in CI: Swift 6.3.3 WMO ICE in ShareScreen.\n",
+    )
+    make_path.write_text(text, encoding='utf-8')
+    return original
+
+
 def build(source, ci, output, env):
     if sys.platform != 'darwin':
         raise RuntimeError('The iOS build requires a macOS runner with Xcode')
@@ -147,7 +165,9 @@ def build(source, ci, output, env):
     # This pinned rules_apple revision checks profile embedding independently
     # of disable_legacy_signing. Gate only that partial for unsigned CI.
     rules_path = source / 'build-system/bazel-rules/rules_apple/apple/internal/ios_rules.bzl'
+    make_path = source / 'build-system/Make/Make.py'
     original_rules = rules_path.read_bytes()
+    original_make = None
     if hashlib.sha256(original_rules).hexdigest() != 'b6776b1c10a2c965f01259dd95ebe1b045afc5e22b3446b8ae81d44f11c3a7da':
         raise ValueError('Unexpected rules_apple iOS rules revision')
     # Builds from this repository start above every earlier build so update checks compare correctly.
@@ -194,7 +214,13 @@ def build(source, ci, output, env):
                             # module failing hides the errors of every module above it until
                             # the next run. rules_swift applies its copt setting after a target's
                             # copts, so this wins (Bazel 9 has no native --swiftcopt).
-                            b'build --@build_bazel_rules_swift//swift:copt=-no-warnings-as-errors\n')
+                            b'build --@build_bazel_rules_swift//swift:copt=-no-warnings-as-errors\n'
+                            # rules_swift WMO defaults to -num-threads NCPU; single-file output avoids
+                            # another class of parallel WMO failures on the pinned Swift toolchain.
+                            b'build --@build_bazel_rules_swift//swift:copt=-num-threads\n'
+                            b'build --@build_bazel_rules_swift//swift:copt=0\n')
+        if configuration == 'release_arm64':
+            original_make = apply_swift_release_workaround(make_path)
         # Let the repository download and checksum its own Bazel, not brew's latest.
         sys.path.insert(0, str(source / 'build-system/Make'))
         from BazelLocation import locate_bazel, calculate_sha256
@@ -267,6 +293,8 @@ def build(source, ci, output, env):
         raise
     finally:
         rules_path.write_bytes(original_rules)
+        if original_make is not None:
+            make_path.write_bytes(original_make)
         rc_path.write_bytes(original_rc)
         cleanup(source)
         save_manifest(manifest_path, manifest)

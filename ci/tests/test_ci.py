@@ -90,6 +90,26 @@ class ArtifactTests(unittest.TestCase):
 
 
 
+class SwiftReleaseWorkaroundTests(unittest.TestCase):
+    def test_make_wmo_marker_matches_repo(self):
+        make_path = Path(__file__).resolve().parents[2] / 'build-system/Make/Make.py'
+        self.assertIn(ci._MAKE_WMO_FEATURE, make_path.read_text(encoding='utf-8'))
+
+    def test_apply_and_restore_make_py(self):
+        make_path = Path(__file__).resolve().parents[2] / 'build-system/Make/Make.py'
+        original = make_path.read_bytes()
+        try:
+            backup = ci.apply_swift_release_workaround(make_path)
+            self.assertEqual(backup, original)
+            text = make_path.read_text(encoding='utf-8')
+            self.assertNotIn("swift.opt_uses_wmo',", text)
+            self.assertIn('swift.opt_uses_wmo omitted in CI', text)
+            make_path.write_bytes(original)
+        except Exception:
+            make_path.write_bytes(original)
+            raise
+
+
 class BuildOutputTests(unittest.TestCase):
     def test_keeps_errors_and_drops_warnings(self):
         lines = [
