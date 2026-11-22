@@ -84,13 +84,28 @@ jobs:
               sudo rm -rf "$app" &
             fi
           done
+          # Bazel/actool needs iOS simulator runtime for .xcassets.
           xcrun simctl shutdown all 2>/dev/null || true
           xcrun simctl delete all 2>/dev/null || true
-          xcrun simctl runtime delete all 2>/dev/null || true
           sudo rm -rf ~/Library/Android /usr/local/share/dotnet ~/.dotnet ~/Library/Developer/CoreSimulator/Caches &
           wait || true
           df -h /
           sysctl -n hw.memsize hw.ncpu || true
+
+      - name: Install iOS Simulator platform
+        run: |
+          set -euo pipefail
+          if ! xcrun simctl list runtimes 2>/dev/null | grep -Eqi 'iOS [0-9]'; then
+            echo "Downloading iOS simulator platform..."
+            xcodebuild -downloadPlatform iOS -architectureVariant arm64 \
+              || xcodebuild -downloadPlatform iOS
+          fi
+          echo "=== Installed runtimes ==="
+          xcrun simctl list runtimes
+          if ! xcrun simctl list runtimes 2>/dev/null | grep -Eqi 'iOS [0-9]'; then
+            echo "::error::iOS simulator runtime is still missing (required for AssetCatalogCompile)"
+            exit 1
+          fi
 
       # Xcode 26 and later ship the Metal compiler as a separate download; the shaders need it.
       - name: Install the Metal toolchain
