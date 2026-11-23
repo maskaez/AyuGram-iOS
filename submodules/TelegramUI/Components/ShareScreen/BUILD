@@ -10,10 +10,8 @@ swift_library(
     ]),
     copts = [
         "-warnings-as-errors",
-        # Swift 6.3.3 / Xcode 26.6: release CopyPropagation ICE on ShareScreen.init (ci/ayugram_ci.py).
+        # Swift 6.3.3 / Xcode 26.6: -O/-Osize CopyPropagation ICE on ShareScreen.init; CI skips WMO in Make.py.
         "-Onone",
-        "-Xfrontend",
-        "-disable-copy-propagation",
     ],
     deps = [
         "//submodules/AsyncDisplayKit",
