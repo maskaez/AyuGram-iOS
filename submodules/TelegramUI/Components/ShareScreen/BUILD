@@ -10,9 +10,10 @@ swift_library(
     ]),
     copts = [
         "-warnings-as-errors",
-        # Swift 6.3 / Xcode 26.6: release CopyPropagation ICE in init (see ci/ayugram_ci.py).
+        # Swift 6.3.3 / Xcode 26.6: release CopyPropagation ICE on ShareScreen.init (ci/ayugram_ci.py).
+        "-Onone",
         "-Xfrontend",
-        "-enable-copy-propagation=false",
+        "-disable-copy-propagation",
     ],
     deps = [
         "//submodules/AsyncDisplayKit",
