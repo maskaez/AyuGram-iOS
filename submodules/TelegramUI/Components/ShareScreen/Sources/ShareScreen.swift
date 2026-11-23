@@ -328,21 +328,30 @@ public final class ShareScreen: ViewControllerComponentContainer {
     private let animateOut = ActionSlot<Action<()>>()
     fileprivate var caption = NSAttributedString(string: "")
 
-    // Release optimizer ICE on Swift 6.3.3; keep this init out of -O/-Osize CopyPropagation.
+    private struct PreparedInit {
+        let subject: Subject
+        let preferredAction: ShareControllerPreferredAction
+        let caption: NSAttributedString
+        let model: ShareScreenState
+        let sender: ShareScreenSendCoordinator
+    }
+
+    // Swift 6.3.3 CopyPropagation ICE: thin init + prepare helper, no bogus swift-frontend flags.
     @_optimize(none)
-    public init(context: AccountContext, subject: Subject, externalShare: Bool = true, presetText: String? = nil, shareStory: (() -> Void)? = nil, preferredAction: ShareControllerPreferredAction = .default, externalShareSubject: ShareControllerSubject? = nil, shareAsLink: Bool = false, forceTheme: PresentationTheme? = nil, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, externalConfiguration: ShareScreenExternalConfiguration? = nil, mediaParameters: ShareControllerSubject.MediaParameters? = nil, segmentedValues: [ShareScreenSegmentedValue]? = nil, collectibleItemInfo: TelegramCollectibleItemInfo? = nil, forcedActionTitle: String? = nil, showInChat: ((EngineRawMessage) -> Void)? = nil, immediatePeerId: EnginePeer.Id? = nil) {
-        self.externalConfiguration = externalConfiguration
-        self.context = context
+    private static func prepareInit(
+        context: AccountContext,
+        subject: Subject,
+        presetText: String?,
+        preferredAction: ShareControllerPreferredAction,
+        showInChat: ((EngineRawMessage) -> Void)?,
+        updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?,
+        externalConfiguration: ShareScreenExternalConfiguration?,
+        segmentedValues: [ShareScreenSegmentedValue]?
+    ) -> PreparedInit {
         var subject = subject
         if let segmentedValues, let first = segmentedValues.first {
             subject = first.subject
         }
-        self.subject = subject
-        self.mediaParameters = mediaParameters
-        self.segmentedValues = segmentedValues.flatMap { $0.isEmpty ? nil : $0 }
-        self.collectibleItemInfo = collectibleItemInfo
-        self.forcedActionTitle = forcedActionTitle
-        self.shareStory = shareStory
         var preferredAction = preferredAction
         if case .default = preferredAction, let showInChat, case let .messages(messages) = subject, messages.count == 1, let message = messages.first {
             let title = (updatedPresentationData?.initial ?? context.sharedContext.currentPresentationData.with { $0 }).strings.SharedMedia_ViewInChat
@@ -350,17 +359,43 @@ public final class ShareScreen: ViewControllerComponentContainer {
                 showInChat(message)
             }))
         }
-        self.preferredAction = preferredAction
+        let model = ShareScreenState(context: context)
+        model.defersItemsUntilFirstLoad = externalConfiguration != nil
+        let sender = ShareScreenSendCoordinator(context: context, subject: subject)
+        let caption = NSAttributedString(string: presetText ?? "")
+        return PreparedInit(subject: subject, preferredAction: preferredAction, caption: caption, model: model, sender: sender)
+    }
+
+    @_optimize(none)
+    public init(context: AccountContext, subject: Subject, externalShare: Bool = true, presetText: String? = nil, shareStory: (() -> Void)? = nil, preferredAction: ShareControllerPreferredAction = .default, externalShareSubject: ShareControllerSubject? = nil, shareAsLink: Bool = false, forceTheme: PresentationTheme? = nil, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, externalConfiguration: ShareScreenExternalConfiguration? = nil, mediaParameters: ShareControllerSubject.MediaParameters? = nil, segmentedValues: [ShareScreenSegmentedValue]? = nil, collectibleItemInfo: TelegramCollectibleItemInfo? = nil, forcedActionTitle: String? = nil, showInChat: ((EngineRawMessage) -> Void)? = nil, immediatePeerId: EnginePeer.Id? = nil) {
+        self.externalConfiguration = externalConfiguration
+        self.context = context
+        self.mediaParameters = mediaParameters
+        self.segmentedValues = segmentedValues.flatMap { $0.isEmpty ? nil : $0 }
+        self.collectibleItemInfo = collectibleItemInfo
+        self.forcedActionTitle = forcedActionTitle
+        self.shareStory = shareStory
         self.externalShareSubject = externalShareSubject
         self.shareAsLink = shareAsLink
-        self.model = ShareScreenState(context: context)
-        self.model.defersItemsUntilFirstLoad = externalConfiguration != nil
-        self.sender = ShareScreenSendCoordinator(context: context, subject: subject)
+        let prepared = Self.prepareInit(
+            context: context,
+            subject: subject,
+            presetText: presetText,
+            preferredAction: preferredAction,
+            showInChat: showInChat,
+            updatedPresentationData: updatedPresentationData,
+            externalConfiguration: externalConfiguration,
+            segmentedValues: segmentedValues
+        )
+        self.subject = prepared.subject
+        self.preferredAction = prepared.preferredAction
+        self.model = prepared.model
+        self.sender = prepared.sender
+        self.caption = prepared.caption
         let contentReady = self.contentReady
         self.model.firstLoadCompleted = {
             contentReady.set(.single(true))
         }
-        self.caption = NSAttributedString(string: presetText ?? "")
         super.init(context: context, component: ShareScreenComponent(model: self.model, sender: self.sender, externalShare: externalShare, initialCaption: self.caption, hasStory: shareStory != nil, animateOut: self.animateOut), navigationBarAppearance: .none, statusBarStyle: .ignore, theme: forceTheme.map { .custom($0) } ?? .default, updatedPresentationData: updatedPresentationData)
         self.navigationPresentation = .flatModal
         self.configureSender()

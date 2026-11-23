@@ -29,9 +29,8 @@ jobs:
       max-parallel: 2
       matrix:
         variant: ${{ fromJSON(inputs.variant == 'custom' && '["custom"]' || inputs.variant == 'standard' && '["standard"]' || '["standard","custom"]') }}
-    # Xcode 26.6 + heavy Bazel: avoid vars.AYUGRAM_RUNNER=macos-latest (long queue / timeouts).
-    # Override via repo variable only when it is a dedicated macOS/Xcode label (e.g. macos-14-xlarge).
-    runs-on: ${{ (vars.AYUGRAM_RUNNER == 'macos-latest' || vars.AYUGRAM_RUNNER == '') && 'xcode-27' || vars.AYUGRAM_RUNNER }}
+    # Pinned for versions.json xcode 26.6. Delete repo variable AYUGRAM_RUNNER if it forces macos-latest (never schedules).
+    runs-on: xcode-27
     timeout-minutes: 360
     defaults:
       run:
