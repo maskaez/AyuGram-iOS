@@ -8,10 +8,12 @@ swift_library(
     srcs = glob([
         "Sources/**/*.swift",
     ]),
+    # Swift 6.3.3 CopyPropagation ICE on the huge init; see ci/ayugram_ci.py + @_optimize(none) in Sources.
+    features = ["-swift.opt_uses_osize"],
     copts = [
         "-warnings-as-errors",
-        # Swift 6.3.3 / Xcode 26.6: -O/-Osize CopyPropagation ICE on ShareScreen.init; CI skips WMO in Make.py.
-        "-Onone",
+        "-Xfrontend",
+        "-enable-copy-propagation=false",
     ],
     deps = [
         "//submodules/AsyncDisplayKit",

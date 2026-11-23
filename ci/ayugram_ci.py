@@ -119,19 +119,24 @@ def save_manifest(path, manifest):
     path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
 
 
-# Unsigned CI skips WMO on GitHub runners (--jobs=2); ShareScreen ICE is fixed in its BUILD/Sources.
+# Unsigned CI skips WMO/-Osize on GitHub runners; ShareScreen ICE is fixed in its BUILD/Sources.
 _MAKE_WMO_FEATURE = "            '--features=swift.opt_uses_wmo',\n"
+_MAKE_OSIZE_FEATURE = "            '--features=swift.opt_uses_osize',\n"
 
 
 def apply_swift_release_workaround(make_path):
-    """Drop whole-module optimization for unsigned CI builds on resource-limited runners."""
+    """Drop WMO and -Osize for unsigned CI: Swift 6.3.3 CopyPropagation bugs on large inits."""
     original = make_path.read_bytes()
     text = original.decode('utf-8')
-    if _MAKE_WMO_FEATURE not in text:
+    if _MAKE_WMO_FEATURE not in text or _MAKE_OSIZE_FEATURE not in text:
         raise ValueError('Make.py release args changed; update swift compiler workaround')
     text = text.replace(
         _MAKE_WMO_FEATURE,
-        "            # swift.opt_uses_wmo omitted in CI (runner RAM; ShareScreen has a local compile workaround).\n",
+        "            # swift.opt_uses_wmo omitted in CI (runner RAM).\n",
+    )
+    text = text.replace(
+        _MAKE_OSIZE_FEATURE,
+        "            # swift.opt_uses_osize omitted in CI (Swift 6.3 CopyPropagation ICE).\n",
     )
     make_path.write_text(text, encoding='utf-8')
     return original
